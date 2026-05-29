@@ -1,16 +1,17 @@
 import { readPsd, initializeCanvas } from 'ag-psd';
+import { logError } from './utils';
 
 // Initialize canvas factory for ag-psd to decode layer pixels in the browser
 initializeCanvas((width, height) => {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  return canvas as any;
+  return canvas;
 });
 
 export interface PsdLayers {
-  mask: string | null;     // Grayscale/transparency mask as base64/dataURL
-  overlay: string | null;  // Visible overlay border as base64/dataURL
+  mask: string | null; // Grayscale/transparency mask as base64/dataURL
+  overlay: string | null; // Visible overlay border as base64/dataURL
   width: number;
   height: number;
 }
@@ -20,7 +21,7 @@ export interface PsdLayers {
  * MapTool/TokenTool overlay format defines:
  * - Layer 0: The transparency mask (where non-transparent/colored pixels represent visible area)
  * - Layer 1: The visible border overlay frame
- * 
+ *
  * @param fileBuffer ArrayBuffer containing the PSD file bytes
  * @returns Promise<PsdLayers>
  */
@@ -53,9 +54,11 @@ export async function parseTokenPsd(fileBuffer: ArrayBuffer): Promise<PsdLayers>
       overlayDataUrl = psd.canvas.toDataURL('image/png');
     }
 
-    // DEBUG FALLBACK: Show error in UI
+    // Validate that we successfully decoded both mask and overlay layers
     if (!maskDataUrl || !overlayDataUrl) {
-      throw new Error(`Layer decode failed! Mask: ${maskLayer?.name} (canvas: ${!!maskLayer?.canvas}). Overlay: ${overlayLayer?.name} (canvas: ${!!overlayLayer?.canvas}).`);
+      throw new Error(
+        `Layer decode failed! Mask: ${maskLayer?.name} (canvas: ${!!maskLayer?.canvas}). Overlay: ${overlayLayer?.name} (canvas: ${!!overlayLayer?.canvas}).`
+      );
     }
 
     return {
@@ -64,8 +67,11 @@ export async function parseTokenPsd(fileBuffer: ArrayBuffer): Promise<PsdLayers>
       width,
       height
     };
-  } catch (error) {
-    console.error('Failed to parse PSD file:', error);
-    throw new Error('Could not parse PSD format. Ensure it has Layer 1 (Mask) and Layer 2 (Overlay).');
+  } catch (error: unknown) {
+    logError('Failed to parse PSD file:', error);
+    throw new Error(
+      'Could not parse PSD format. Ensure it has Layer 1 (Mask) and Layer 2 (Overlay).',
+      { cause: error }
+    );
   }
 }
